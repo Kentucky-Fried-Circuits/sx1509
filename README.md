@@ -8,7 +8,6 @@ ESP-IDF library for the sx1509 16-I/O expander. Capable of driving LEDs - with b
 Are you low on I/O? No problem! The sx1509 is a 16-channel GPIO expander with an I2C interface – that means with just two wires, your microcontroller can interface with 16 fully configurable digital input/output pins. But the SX1509 can do so much more than just simple digital pin control. It can produce PWM signals, so you can dim LEDs. It can be set to blink or even breathe pins at varying rates. This breakout is similar to a multiplexer or "mux," in that it allows you to get more IO from less pins. And, with a built-in keypad engine, it can interface with up to 64 buttons set up in an 8x8 matrix.
 
 Since the I/O banks can operate between 1.2V and 3.6V (5.5V tolerant) independent of both the core and each other, this device can also work as a level-shifter. 
-Please be aware that v3 of the library breaks previous version compatiblity on a few things:
 
 Repository Contents
 -------------------
