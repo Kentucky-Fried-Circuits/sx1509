@@ -22,7 +22,7 @@ Development environment specifics:
 
 #include "sx1509.hpp"
 #include "sx1509_registers.h"
-#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG //FIXME doesn't work
+#define LOG_LOCAL_LEVEL ESP_LOG_DEBUG // this works! It even overrides the CONFIG_LOG_MAXIMUM_LEVEL_DEBUG
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
