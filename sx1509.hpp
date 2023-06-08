@@ -72,7 +72,7 @@ private: // These private functions are not available to Arduino sketches.
 	gpio_num_t pinInterrupt;
 	gpio_num_t pinOscillator;
 	gpio_num_t pinReset;
-	uint8_t  _slave_addr;
+	uint8_t  _server_addr;
 	// Misc variables:
 	unsigned long _clkX;
 	// Read Functions:
@@ -104,23 +104,24 @@ public:
 	SX1509();
 	
 	// -----------------------------------------------------------------------------
-	// begin(uint8_t address, uint8_t resetPin): This function initializes the SX1509.
-	//  	It requires wire to already be begun (previous versions did not do this), resets the IC, and tries to read some
-	//  	registers to prove it's connected.
-	// Inputs:
-	//		- slave_addr should be the 7-bit address of the SX1509. This should be
-	//		 one of four values - 0x3E, 0x3F, 0x70, 0x71 - all depending on what the
-	//		 ADDR0 and ADDR1 pins ar se to. This variable is required.
-	//		- resetPin: This is the Arduino pin tied to the SX1509 RST pin. This
-	//		 pin is optional. If not declared, the library will attempt to
-	//		 software reset the SX1509.
-	//		- interruptPin: This is the Arduino pin tied to the SX1509 interrupt pin. This
-	//		 pin is optional. 
-	//		- oscillatorPin: This is the Arduino pin tied to the SX1509 OSC pin. This
-	//		 pin is optional.
-	// Output: Returns a ESP_OK if communication is successful, ESP_ERR on error.
-	// -----------------------------------------------------------------------------
-	esp_err_t begin(uint16_t slave_addr, int sda_io_num, int scl_io_num, gpio_num_t resetPin = GPIO_NUM_MAX, gpio_num_t interruptPin = GPIO_NUM_MAX, gpio_num_t oscillatorPin = GPIO_NUM_MAX, uint32_t clk_speed = 200000);
+	/**
+	 * @brief initializes the SX1509
+	 * @note It requires the i2c interface to already be begun, resets the IC, and tries to read some
+	 *  	registers to prove it's connected.
+	 *
+	 * @param server_addr should be the 7-bit address of the SX1509. This should be
+	 *		 one of four values - 0x3E, 0x3F, 0x70, 0x71 - all depending on what the
+	 *		 ADDR0 and ADDR1 pins are set to. This variable is required.
+	 * @param resetPin This is the Arduino pin tied to the SX1509 RST pin. This
+	 *		 pin is optional. If not declared, the library will attempt to
+	 *		 software reset the SX1509.
+	 * @param interruptPin This is the Arduino pin tied to the SX1509 interrupt pin. This
+	 *		 pin is optional.
+	 * @param oscillatorPin This is the Arduino pin tied to the SX1509 OSC pin. This
+	 *		 pin is optional.
+	 * @return esp_err_t ESP_OK if communication is successful, ESP_ERR on error
+	 */
+	esp_err_t begin(uint16_t server_addr, gpio_num_t resetPin = GPIO_NUM_MAX, gpio_num_t interruptPin = GPIO_NUM_MAX, gpio_num_t oscillatorPin = GPIO_NUM_MAX);
 
 	// -----------------------------------------------------------------------------
 	// end(): This function unistalls the I2C driver for the SX1509 so a different

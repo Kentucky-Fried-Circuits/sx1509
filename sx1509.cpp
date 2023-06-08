@@ -32,29 +32,30 @@ SX1509::SX1509()
 	_clkX = 0;
 }
 
-esp_err_t SX1509::begin(uint16_t slave_addr, int sda_io_num, int scl_io_num, gpio_num_t resetPin, gpio_num_t interruptPin, gpio_num_t oscillatorPin, uint32_t clk_speed) 
+esp_err_t SX1509::begin(uint16_t server_addr, gpio_num_t resetPin, gpio_num_t interruptPin, gpio_num_t oscillatorPin) 
 {
 	esp_err_t ret = ESP_OK;
+	// This is I2C setup that should have happened independently of the SX1509 driver
+	// conf.mode = I2C_MODE_MASTER;
+	// conf.sda_io_num = sda_io_num;
+	// conf.scl_io_num = scl_io_num;
+	// conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+	// conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+	// conf.master.clk_speed = clk_speed; //DEBUG FIXME
+	// ESP_LOGD(LIBTAG, "i2c_param_config");
+	// ret = i2c_param_config(I2C_NUM_0, &conf);
+	// ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "begin(): i2c_param_config() returned 0x%x", ret);
+	// ESP_LOGD(LIBTAG, "i2c_driver_install");
+	// ret = i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+	// ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "begin(): i2c_driver_install() returned 0x%x", ret);
+
 	// Store the received parameters into member variables
-	conf.mode = I2C_MODE_MASTER;
-	conf.sda_io_num = sda_io_num;
-	conf.scl_io_num = scl_io_num;
-	conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = clk_speed; //DEBUG FIXME
-   	//conf.slave.slave_addr = slave_addr; //FIXME only if this is the slave device?
-	_slave_addr = slave_addr; 
+	_server_addr = server_addr; 
 	//conf.slave.maximum_speed = 400000; // TODO
 	pinReset = resetPin;
 	pinInterrupt = interruptPin;
 	pinOscillator = oscillatorPin;
 
-    ESP_LOGD(LIBTAG, "i2c_param_config");
-    ret = i2c_param_config(I2C_NUM_0, &conf);
-	ESP_RETURN_ON_FALSE(( ret == ESP_OK ), ret, LIBTAG, "begin(): i2c_param_config() returned 0x%x", ret);
-	ESP_LOGD(LIBTAG, "i2c_driver_install");
-	ret = i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
-	ESP_RETURN_ON_FALSE(( ret == ESP_OK ), ret, LIBTAG, "begin(): i2c_driver_install() returned 0x%x", ret);
 	ret = init();
 	ESP_RETURN_ON_FALSE(( ret == ESP_OK ), ret, LIBTAG, "begin(): init() returned 0x%x", ret);
 	return ret;
@@ -72,10 +73,8 @@ esp_err_t SX1509::end()
 esp_err_t SX1509::init()
 {
 	esp_err_t ret;
-	// Begin I2C should be done externally, before beginning SX1509
-	//Wire.begin();
 
-	// // If the reset pin is connected
+	// If the reset pin is connected
 	if (pinReset != GPIO_NUM_MAX)
 	{
 		ESP_LOGI(LIBTAG, "Hardware reset");
@@ -85,10 +84,10 @@ esp_err_t SX1509::init()
 		reset(0);
 	}
 	// are you there? 
-	ESP_LOGI(LIBTAG, "Request ACK from %x", _slave_addr);
+	ESP_LOGI(LIBTAG, "Request ACK from %x", _server_addr);
 	i2c_cmd_handle_t cmd = i2c_cmd_link_create();
 	i2c_master_start(cmd);
-	i2c_master_write_byte(cmd, (_slave_addr << 1) | I2C_MASTER_WRITE, 1 /* expect ack */);
+	i2c_master_write_byte(cmd, (_server_addr << 1) | I2C_MASTER_WRITE, 1 /* expect ack */);
 	i2c_master_stop(cmd);
 
 	ret = i2c_master_cmd_begin(I2C_NUM_0, cmd, 10 / portTICK_PERIOD_MS);
@@ -855,7 +854,7 @@ esp_err_t SX1509::readByte(uint8_t registerAddress, uint8_t* read_buffer)
 
 	// readValue = _i2cPort->read();
 
-	return i2c_master_write_read_device(I2C_NUM_0, _slave_addr,
+	return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
 		&registerAddress, 1,
 		read_buffer, 1,
 		10 / portTICK_PERIOD_MS);
@@ -922,7 +921,7 @@ esp_err_t SX1509::readWord(uint8_t registerAddress, uint16_t *value)
 //TEST
 esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t* destination, uint8_t length)
 {
-	return i2c_master_write_read_device(I2C_NUM_0, _slave_addr,
+	return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
 		&firstRegisterAddress, 1,
 		destination, length,
 		length * 10 / portTICK_PERIOD_MS); // TODO timing is a guess, and probably too long
@@ -936,7 +935,7 @@ esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t* destination, 
 esp_err_t SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 {
 	const uint8_t write_buffer[] = {registerAddress, writeValue};
-	return i2c_master_write_to_device(I2C_NUM_0, _slave_addr,
+	return i2c_master_write_to_device(I2C_NUM_0, _server_addr,
                                      write_buffer, 2,
                                      10 / portTICK_PERIOD_MS);
 }
@@ -955,7 +954,7 @@ esp_err_t SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 		((uint8_t)(writeValue & 0x00FF))
 		};
     // ESP_LOGD(LIBTAG, "reg:0x%x val:0x%x, bytes:0x%x, 0x%x)", write_buffer[0], writeValue, write_buffer[1], write_buffer[2]);
-	return i2c_master_write_to_device(I2C_NUM_0, _slave_addr,
+	return i2c_master_write_to_device(I2C_NUM_0, _server_addr,
                                      write_buffer, 3,
                                      2* 10 / portTICK_PERIOD_MS);
 }

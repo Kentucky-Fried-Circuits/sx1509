@@ -23,7 +23,8 @@ Documentation
 
 Version History
 ---------------
+see RELEASE.md
 
 License Information
 -------------------
-(C) 2022 Solar Stik, Inc. Creative Commons Attribution 2.0 (CC-BY 2.0) License
+see LICENSE.txt
