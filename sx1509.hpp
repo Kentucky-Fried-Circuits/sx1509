@@ -47,6 +47,7 @@ Development environment specifics:
 #define HARDWARE_RESET 1
 
 // Arduino definitions TODO move to separate header
+#ifndef ARDUINO
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 #define HIGH 0x1
 #define LOW 0x0
@@ -56,7 +57,7 @@ Development environment specifics:
 #define CHANGE 1
 #define FALLING 2
 #define RISING 3
-
+#endif
 
 #define ANALOG_OUTPUT 0x3 // To set a pin mode for PWM output
 
