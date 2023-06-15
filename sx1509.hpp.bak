@@ -48,27 +48,15 @@ Development environment specifics:
 
 // Arduino definitions TODO move to separate header
 #ifndef ARDUINO
-#warning no arduino. using my gpio defines
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 #define HIGH 0x1
 #define LOW 0x0
-// Values from Arduino.h and esp32-hal-gpio.h
-#define INPUT 0x01
-#define OUTPUT 0x03
-#define INPUT_PULLUP 0x05
-#define DISABLED 0x00
-#define RISING 0x01
-#define FALLING 0x02
-#define CHANGE 0x03
-// My original values. Don't know where I got them.
-// #define INPUT 0x0
-// #define OUTPUT 0x1
-// #define INPUT_PULLUP 0x2
-// #define RISING 3
-// #define FALLING 2
-// #define CHANGE 1
-#else 
-#warning using arduino gpio defines
+#define INPUT 0x0
+#define OUTPUT 0x1
+#define INPUT_PULLUP 0x2
+#define CHANGE 1
+#define FALLING 2
+#define RISING 3
 #endif
 
 #define ANALOG_OUTPUT 0x3 // To set a pin mode for PWM output

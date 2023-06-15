@@ -261,28 +261,28 @@ uint8_t SX1509::readPin(uint8_t pin)
 	return LOW;
 }
 
-bool SX1509::readPin(const uint8_t pin, bool *value)
-{
-	uint16_t tempRegDir;
-	if (readWord(REG_DIR_B, &tempRegDir))
-	{
-		if (tempRegDir & (1 << pin))
-		{ // If the pin is an input
-			uint16_t tempRegData;
-			if (readWord(REG_DATA_B, &tempRegData))
-			{
-				*value = (tempRegData & (1 << pin)) != 0;
-				return true;
-			};
-		}
-		else
-		{
-			*value = false;
-			return true;
-		}
-	}
-	return false;
-}
+// bool SX1509::readPin(const uint8_t pin, bool *value)
+// {
+// 	uint16_t tempRegDir;
+// 	if (readWord(REG_DIR_B, &tempRegDir))
+// 	{
+// 		if (tempRegDir & (1 << pin))
+// 		{ // If the pin is an input
+// 			uint16_t tempRegData;
+// 			if (readWord(REG_DATA_B, &tempRegData))
+// 			{
+// 				*value = (tempRegData & (1 << pin)) != 0;
+// 				return true;
+// 			};
+// 		}
+// 		else
+// 		{
+// 			*value = false;
+// 			return true;
+// 		}
+// 	}
+// 	return false;
+// }
 
 uint8_t SX1509::digitalRead(uint8_t pin)
 {
