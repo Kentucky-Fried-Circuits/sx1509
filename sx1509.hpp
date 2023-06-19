@@ -68,7 +68,7 @@ Development environment specifics:
 // #define FALLING 2
 // #define CHANGE 1
 #else 
-#warning using arduino gpio defines
+// #warning using arduino gpio defines
 #endif
 
 #define ANALOG_OUTPUT 0x3 // To set a pin mode for PWM output
