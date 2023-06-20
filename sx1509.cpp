@@ -918,7 +918,7 @@ esp_err_t SX1509::readWord(uint8_t registerAddress, uint16_t *value)
 //	- destination is an array of bytes where the read values will be stored into
 //	- length is the number of bytes to be read
 //	- Return esp_err_t
-//TEST
+//FIXME I2C_NUM_0 should not be hard-coded
 esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t* destination, uint8_t length)
 {
 	return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
