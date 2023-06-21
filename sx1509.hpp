@@ -89,7 +89,7 @@ private: // These private functions are not available to Arduino sketches.
 	// Misc variables:
 	unsigned long _clkX;
 	// Read Functions:
-//	uint16_t readWord(uint8_t registerAddress);
+	uint16_t readWord(uint8_t registerAddress);
 
 
 	// Write functions, returning success or failure:
@@ -107,6 +107,7 @@ public:
 	esp_err_t writeByte(uint8_t registerAddress, uint8_t writeValue);
 	esp_err_t writeWord(uint8_t registerAddress, uint16_t writeValue);
 	esp_err_t readWord(uint8_t registerAddress, uint16_t *value); // FIXME DEBUG Private
+	uint8_t readByte(uint8_t registerAddress);
 	esp_err_t readByte(uint8_t registerAddress, uint8_t *value);
 	// Read Functions returning success or failure:
 	esp_err_t readBytes(uint8_t firstRegisterAddress, uint8_t *destination, uint8_t length);
@@ -453,13 +454,18 @@ public:
 	esp_err_t interruptSource(uint16_t *intSource, bool clear = true);
 
 	// -----------------------------------------------------------------------------
-	// checkInterrupt(void): Checks if a single pin generated an interrupt.
+	// checkInterrupt(uint8_t): Checks if a single pin generated an interrupt.
 	//
 	//	Output: Boolean value. True if the requested pin has triggered an interrupt/
 	//  Input:
 	//  	- pin: Pin to be checked for generating an input.
 	// -----------------------------------------------------------------------------
 	bool checkInterrupt(uint8_t pin);
+
+	// -----------------------------------------------------------------------------
+	// clearInterrupt(void): clear the interrupt
+	// // -----------------------------------------------------------------------------
+	esp_err_t clearInterrupt();
 
 	// -----------------------------------------------------------------------------
 	// configClock(uint8_t oscSource, uint8_t oscPinFunction, uint8_t oscFreqOut, uint8_t oscDivider)

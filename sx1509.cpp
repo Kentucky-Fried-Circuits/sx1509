@@ -591,64 +591,70 @@ esp_err_t SX1509::setupBlink(uint8_t pin, uint8_t onReg, uint8_t offReg, uint8_t
 // 	writeByte(REG_MISC, (regMisc & ~(1 << 2)));
 // }
 
-// void SX1509::debounceConfig(uint8_t configValue)
-// {
-// 	// First make sure clock is configured
-// 	uint8_t tempByte = readByte(REG_MISC);
-// 	if ((tempByte & 0x70) == 0)
-// 	{
-// 		tempByte |= (1 << 4); // Just default to no divider if not set
-// 		writeByte(REG_MISC, tempByte);
-// 	}
-// 	tempByte = readByte(REG_CLOCK);
-// 	if ((tempByte & 0x60) == 0)
-// 	{
-// 		tempByte |= (1 << 6); // default to internal osc.
-// 		writeByte(REG_CLOCK, tempByte);
-// 	}
+void SX1509::debounceConfig(uint8_t configValue)
+{
+	// First make sure clock is configured
+	uint8_t tempByte = readByte(REG_MISC);
+	if ((tempByte & 0x70) == 0)
+	{
+		tempByte |= (1 << 4); // Just default to no divider if not set
+		writeByte(REG_MISC, tempByte);
+	}
+	tempByte = readByte(REG_CLOCK);
+	if ((tempByte & 0x60) == 0)
+	{
+		tempByte |= (1 << 6); // default to internal osc.
+		writeByte(REG_CLOCK, tempByte);
+	}
 
-// 	configValue &= 0b111; // 3-bit value
-// 	writeByte(REG_DEBOUNCE_CONFIG, configValue);
-// }
+	configValue &= 0b111; // 3-bit value
+	ESP_LOGD(LIBTAG, "debounceConfig value:x%02x", configValue);
+	writeByte(REG_DEBOUNCE_CONFIG, configValue);
+}
 
-// void SX1509::debounceTime(uint8_t time)
-// {
-// 	if (_clkX == 0)					   // If clock hasn't been set up.
-// 		clock(INTERNAL_CLOCK_2MHZ, 1); // Set clock to 2MHz.
+/**
+ * @brief set debounce time
+ * 
+ * @param time in ms, rounded down to nearest power of 2
+ */
+void SX1509::debounceTime(uint8_t time)
+{
+	if (_clkX == 0)					   // If clock hasn't been set up.
+		clock(INTERNAL_CLOCK_2MHZ, 1); // Set clock to 2MHz.
 
-// 	// Debounce time-to-byte map: (assuming fOsc = 2MHz)
-// 	// 0: 0.5ms		1: 1ms
-// 	// 2: 2ms		3: 4ms
-// 	// 4: 8ms		5: 16ms
-// 	// 6: 32ms		7: 64ms
-// 	// 2^(n-1)
-// 	uint8_t configValue = 0;
-// 	// We'll check for the highest set bit position,
-// 	// and use that for debounceConfig
-// 	for (int8_t i = 7; i >= 0; i--)
-// 	{
-// 		if (time & (1 << i))
-// 		{
-// 			configValue = i + 1;
-// 			break;
-// 		}
-// 	}
-// 	configValue = constrain(configValue, 0, 7);
+	// Debounce time-to-byte map: (assuming fOsc = 2MHz)
+	// 0: 0.5ms		1: 1ms
+	// 2: 2ms		3: 4ms
+	// 4: 8ms		5: 16ms
+	// 6: 32ms		7: 64ms
+	// 2^(n-1)
+	uint8_t configValue = 0;
+	// We'll check for the highest set bit position,
+	// and use that for debounceConfig
+	for (int8_t i = 7; i >= 0; i--)
+	{
+		if (time & (1 << i))
+		{
+			configValue = i + 1;
+			break;
+		}
+	}
+	configValue = constrain(configValue, 0, 7);
 
-// 	debounceConfig(configValue);
-// }
+	debounceConfig(configValue);
+}
 
-// void SX1509::debounceEnable(uint8_t pin)
-// {
-// 	uint16_t debounceEnable = readWord(REG_DEBOUNCE_ENABLE_B);
-// 	debounceEnable |= (1 << pin);
-// 	writeWord(REG_DEBOUNCE_ENABLE_B, debounceEnable);
-// }
+void SX1509::debounceEnable(uint8_t pin)
+{
+	uint16_t debounceEnable = readWord(REG_DEBOUNCE_ENABLE_B);
+	debounceEnable |= (1 << pin);
+	writeWord(REG_DEBOUNCE_ENABLE_B, debounceEnable);
+}
 
-// void SX1509::debouncePin(uint8_t pin)
-// {
-// 	debounceEnable(pin);
-// }
+void SX1509::debouncePin(uint8_t pin)
+{
+	debounceEnable(pin);
+}
 
 // void SX1509::debounceKeypad(uint8_t time, uint8_t numRows, uint8_t numCols)
 // {
@@ -712,20 +718,24 @@ esp_err_t SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 	return ret;
 }
 
-//TEST
 esp_err_t SX1509::interruptSource( uint16_t *intSource, bool clear /* =true*/)
 {
 	esp_err_t ret = ESP_OK;
 	ret = readWord(REG_INTERRUPT_SOURCE_B, intSource);
 	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_INTERRUPT_SOURCE_B) returned 0x%x", ret);
-	if (clear) 
-	{	
-		ret = writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF) returned 0x%x", ret);
-	}
+	if (clear)
+		ret = clearInterrupt(); // TEST
+	// {	
+	// 	ret = writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF);
+	// 	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF) returned 0x%x", ret);
+	// }
 	return ret;
 }
 
+esp_err_t SX1509::clearInterrupt()
+{
+	return writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF); // writes to both SOURCE_B and the following SOURCE_A
+}
 //TEST
 bool SX1509::checkInterrupt(uint8_t pin)
 {
@@ -840,20 +850,27 @@ esp_err_t SX1509::readByte(uint8_t registerAddress, uint8_t* read_buffer)
 	// 	10 / portTICK_PERIOD_MS);
 }
 
-// // readWord(uint8_t registerAddress)
-// //	This function will read a two-byte word beginning at registerAddress
-// //	- A 16-bit uint16_t will be returned.
-// //		- The msb of the return value will contain the value read from registerAddress
-// //		- The lsb of the return value will contain the value read from registerAddress + 1
-// uint16_t SX1509::readWord(uint8_t registerAddress)
-//...
-// 	return readValue;
-// }
+// readWord(uint8_t registerAddress)
+//	This function will read a two-byte word beginning at registerAddress
+//	- A 16-bit uint16_t will be returned.
+//		- The msb of the return value will contain the value read from registerAddress
+//		- The lsb of the return value will contain the value read from registerAddress + 1
+uint16_t SX1509::readWord(uint8_t registerAddress)
+{
+	uint16_t readValue;
+	readWord(registerAddress, &readValue);
+	return readValue;
+}
 
-// bool SX1509::readByte(uint8_t registerAddress, uint8_t *value)
-// {
-// 	return readBytes(registerAddress, value, 1);
-// }
+// readByte(uint8_t registerAddress)
+//	This function will read a byte at registerAddress
+//	- A uint8_t will be returned.
+uint8_t SX1509::readByte(uint8_t registerAddress)
+{
+	uint8_t readValue;
+	readByte(registerAddress, &readValue);
+	return readValue;
+}
 
 // readWord(uint8_t registerAddress)
 //	This function will read a two-byte word beginning at registerAddress
