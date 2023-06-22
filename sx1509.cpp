@@ -45,16 +45,16 @@ esp_err_t SX1509::begin(i2c_dev_t *dev, uint16_t server_addr, gpio_num_t resetPi
 	_dev = dev;
     dev->addr = server_addr;
 	//dev->timeout_ticks = pdMS_TO_TICKS(10); // FIXME i2cdev.h says these ticks are against an 80 KHz(?) clock, not the FreeRTOS ticks.
-	ESP_RETURN_ON_ERROR(i2c_dev_create_mutex(_dev), LIBTAG, "create_mutex failed");
-	ESP_RETURN_ON_ERROR(init(), LIBTAG, "init() failed");
 
 	// Store the received parameters into member variables
 	_server_addr = server_addr; // TODO don't store this separate from _dev
-	pinReset = resetPin;
-	pinInterrupt = interruptPin;
-	pinOscillator = oscillatorPin;
+	_pinReset = resetPin;
+	_pinInterrupt = interruptPin;
+	_pinOscillator = oscillatorPin;
 
-    return ESP_OK;
+	ESP_RETURN_ON_ERROR(i2c_dev_create_mutex(_dev), LIBTAG, "create_mutex failed");
+	ESP_RETURN_ON_ERROR(init(), LIBTAG, "init() failed");
+	return ESP_OK;
 }
 
 esp_err_t SX1509::end() 
@@ -69,7 +69,7 @@ esp_err_t SX1509::end()
 esp_err_t SX1509::init()
 {
 	// If the reset pin is connected
-	if (pinReset != GPIO_NUM_MAX)
+	if (_pinReset != GPIO_NUM_MAX)
 	{
 		ESP_LOGD(LIBTAG, "Hardware reset");
 		reset(1);
@@ -104,10 +104,10 @@ esp_err_t SX1509::reset(bool hardware)
 		}
 		ESP_LOGD(LIBTAG, "read REG_MISC: %x", regMisc);
 		// Reset the SX1509, the pin is active low
-		gpio_set_direction(pinReset, GPIO_MODE_OUTPUT);
-		gpio_set_level(pinReset, LOW);  // pull reset pin low
+		gpio_set_direction(_pinReset, GPIO_MODE_OUTPUT);
+		gpio_set_level(_pinReset, LOW);  // pull reset pin low
 		vTaskDelay(pdMS_TO_TICKS(1));					  // Wait for the pin to settle
-		gpio_set_level(pinReset, HIGH); // pull reset pin back high
+		gpio_set_level(_pinReset, HIGH); // pull reset pin back high
 	}
 	else
 	{
@@ -582,10 +582,10 @@ esp_err_t SX1509::setupBlink(uint8_t pin, uint8_t onReg, uint8_t offReg, uint8_t
 // 	}
 
 // 	// Toggle nReset pin to sync LED timers
-// 	::pinMode(pinReset, OUTPUT);	  // set reset pin as output
-// 	::digitalWrite(pinReset, LOW);  // pull reset pin low
+// 	::pinMode(_pinReset, OUTPUT);	  // set reset pin as output
+// 	::digitalWrite(_pinReset, LOW);  // pull reset pin low
 // 	delay(1);					  // Wait for the pin to settle
-// 	::digitalWrite(pinReset, HIGH); // pull reset pin back high
+// 	::digitalWrite(_pinReset, HIGH); // pull reset pin back high
 
 // 	// Return nReset to POR functionality
 // 	writeByte(REG_MISC, (regMisc & ~(1 << 2)));

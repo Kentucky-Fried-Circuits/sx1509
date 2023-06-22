@@ -80,11 +80,11 @@ private: // These private functions are not available to Arduino sketches.
 		 // If you need to read or write directly to registers, consider
 		 // putting the writeByte, readByte functions in the public section
 	i2c_dev_t *_dev;
-	uint8_t deviceAddress; // I2C Address of SX1509
+	uint8_t _deviceAddress; // I2C Address of SX1509
 						   // Pin definitions:
-	gpio_num_t pinInterrupt;
-	gpio_num_t pinOscillator;
-	gpio_num_t pinReset;
+	gpio_num_t _pinInterrupt;
+	gpio_num_t _pinOscillator;
+	gpio_num_t _pinReset;
 	uint8_t  _server_addr;
 	// Misc variables:
 	unsigned long _clkX;
