@@ -48,7 +48,7 @@ Development environment specifics:
 
 // Arduino definitions TODO move to separate header
 #ifndef ARDUINO
-#warning no arduino. using my gpio defines
+#pragma message ("ARDUINO not defined, so replicating some Arduino defines")
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
 #define HIGH 0x1
 #define LOW 0x0
