@@ -46,6 +46,8 @@ Development environment specifics:
 #define SOFTWARE_RESET 0
 #define HARDWARE_RESET 1
 
+#define SX1509_PIN_MAX (16) // used by applications to indicate pin not defined, or out of range, or in an iterator
+
 // Arduino definitions TODO move to separate header
 #ifndef ARDUINO
 #pragma message ("ARDUINO not defined, so replicating some Arduino defines")
