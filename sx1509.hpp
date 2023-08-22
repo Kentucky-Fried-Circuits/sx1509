@@ -49,11 +49,16 @@ Development environment specifics:
 #define SX1509_PIN_MAX (16) // used by applications to indicate pin not defined, or out of range, or in an iterator
 
 // Arduino definitions TODO move to separate header
-#ifndef ARDUINO
+#ifndef constrain
 #pragma message ("ARDUINO not defined, so replicating some Arduino defines")
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#endif
+#ifndef HIGH
 #define HIGH 0x1
+#endif
+#ifndef LOW
 #define LOW 0x0
+#endif
 // Values from Arduino.h and esp32-hal-gpio.h
 #define INPUT 0x01
 #define OUTPUT 0x03
@@ -506,5 +511,3 @@ public:
 
 // Add backwards compatibility for the old class name: sx1509Class
 typedef SX1509 sx1509Class;
-
-#endif // SX1509_library_H
