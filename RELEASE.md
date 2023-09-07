@@ -16,6 +16,7 @@ FIXME(?) remove depencency on UncleRus' i2cdev and esp_idf_lib_helpers
 ## Known Issues
 * It's probable that the code isn't turning on the back light.
 * Not every operation is yet thread-safe, I think. At the port level, yes, but not the device level.
+* Handle twai alerts. 
 
 ## Troubleshooting
 05-1000193 REV A #1, 05-1000219 REV - #2.

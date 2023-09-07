@@ -127,9 +127,9 @@ public:
 	// -----------------------------------------------------------------------------
 	/**
 	 * @brief initializes the SX1509
-	 * @note It requires the i2c interface to already be begun, resets the IC, and tries to read some
+	 * @note It requires the i2c interface to already be begun (i2cdev_init()), resets the IC, and tries to read some
 	 *  	registers to prove it's connected.
-	 *
+	 * @param port i2c_port_t (0 or 1 for ESP32)
 	 * @param server_addr should be the 7-bit address of the SX1509. This should be
 	 *		 one of four values - 0x3E, 0x3F, 0x70, 0x71 - all depending on what the
 	 *		 ADDR0 and ADDR1 pins are set to. This variable is required.

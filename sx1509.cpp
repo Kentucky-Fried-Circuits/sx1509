@@ -175,26 +175,29 @@ esp_err_t SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 	// If INPUT_PULLUP was called, set up the pullup too:
 	if (inOut == INPUT_PULLUP)
 	{
-		ret = writePin(pin, HIGH); 
+		ESP_ERROR_CHECK(i2c_dev_give_mutex(&_dev));
+		ret = writePin(pin, HIGH);
+		ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 		ESP_LOGD(LIBTAG, "pulling up pin: writePin(%i, %i) returned 0x%x", pin, HIGH, ret);
 		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "writePin(%i, %i) returned 0x%x", pin, HIGH, ret);
 	}
 	if (inOut == ANALOG_OUTPUT)
 	{
 		i2c_dev_give_mutex(&_dev);
-		ret = ledDriverInit(pin); 
+		ret = ledDriverInit(pin);
 		i2c_dev_take_mutex(&_dev);
 		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "ledDriverInit(%i) returned 0x%x", pin, ret);
 	}
 
 pinMode_return:
-	i2c_dev_give_mutex(&_dev);
+	ESP_ERROR_CHECK(i2c_dev_give_mutex(&_dev));
 	return ret;
 }
 
 esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 {
 	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
+	ESP_LOGD(LIBTAG, "i2c_addr:0x%x pin:%d val:%d", _server_addr, pin, highLow);
 	esp_err_t ret = ESP_OK;
 	uint16_t tempRegDir;
 	ret = readWord(REG_DIR_B, &tempRegDir);
@@ -208,7 +211,7 @@ esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 			tempRegData |= (1 << pin);
 		else
 			tempRegData &= ~(1 << pin);
-		return writeWord(REG_DATA_B, tempRegData);
+		ret = writeWord(REG_DATA_B, tempRegData);
 	}
 	else // Otherwise the pin is an input, pull-up/down
 	{
@@ -233,11 +236,12 @@ esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "writeWord(REG_PULL_UP_B) returned 0x%x", ret);
 		ret = writeWord(REG_PULL_DOWN_B, tempPullDown);
 		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "writeWord(REG_PULL_DOWN_B) returned 0x%x", ret);
-
-	writePin_return:
-		i2c_dev_give_mutex(&_dev);
-		return ret;
 	}
+
+writePin_return:
+	ESP_ERROR_CHECK(i2c_dev_give_mutex(&_dev));
+	ESP_LOGD(LIBTAG, "writePin(): gave up mutex");
+	return ret;
 }
 
 esp_err_t SX1509::digitalWrite(uint8_t pin, uint8_t highLow)
