@@ -1,7 +1,9 @@
 sx1509 IO Expander ESP-IDF Library
 ========================================
 ported from
-[![SparkFun SX1509 IO Expander Breakout](https://cdn.sparkfun.com//assets/parts/1/0/9/5/6/13601-01.jpg)](https://www.sparkfun.com/products/13601)
+[![SparkFun SX1509 IO Expander Breakout](https://cdn.sparkfun.com//assets/parts/1/0/9/5/6/13601-01.jpg)](https://www.sparkfun.com/products/13601).
+Uses esp-idf-lib for thread-safe operations. 
+Not every operation is thread-safe yet.
 
 ESP-IDF library for the sx1509 16-I/O expander. Capable of driving LEDs - with blink, and breathe functions - or monitoring up to 64 buttons in an 8x8 array.
 

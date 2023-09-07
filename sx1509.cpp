@@ -1,7 +1,7 @@
 /******************************************************************************
-sx1509.cpp ported by Brian Alano, Solar Stik, Inc. from 
+sx1509.cpp ported by Brian Alano, Solar Stik, Inc. from
 
-SparkFunSX1509.cpp 
+SparkFunSX1509.cpp
 SparkFun SX1509 I/O Expander Library Source File
 Jim Lindblom @ SparkFun Electronics
 Original Creation Date: September 21, 2015
@@ -9,7 +9,7 @@ https://github.com/sparkfun/SparkFun_SX1509_Arduino_Library
 
 Here you'll find the ESP-IDF code used to interface with the SX1509 I2C
 16 I/O expander. There are functions (many not implemented) to take advantage of everything the
-SX1509 provides - input/output setting, writing pins high/low, reading 
+SX1509 provides - input/output setting, writing pins high/low, reading
 the input value of pins, LED driver utilities (blink, breath, pwm), and
 keypad engine utilites.
 
@@ -19,6 +19,9 @@ Development environment specifics:
 
 (C) 2022 Solar Stik, Inc. Creative Commons Attribution 2.0 (CC-BY 2.0) License
 ******************************************************************************/
+
+// C libs
+#include <string.h>
 
 #include "sx1509.hpp"
 #include "sx1509_registers.h"
@@ -32,19 +35,19 @@ SX1509::SX1509()
 	_clkX = 0;
 }
 
-esp_err_t SX1509::begin(i2c_dev_t *dev, uint16_t server_addr, gpio_num_t resetPin, gpio_num_t interruptPin, gpio_num_t oscillatorPin) 
+esp_err_t SX1509::begin(i2c_port_t port, i2c_config_t *cfg, uint16_t server_addr, gpio_num_t resetPin, gpio_num_t interruptPin, gpio_num_t oscillatorPin)
 {
-    // TODO CHECK_ARG(dev && (
-    //         (server_addr [is acceptable]))
+	// TODO CHECK_ARG(dev && (
+	//         (server_addr [is acceptable]))
 
-	// We assume these are already defined in dev. FIXME there's no reason to split this up.
-    // dev->port = ;
-    // dev->cfg.sda_io_num = ;
-    // dev->cfg.scl_io_num = ;
-    // dev->cfg.master.clk_speed = ;
-	_dev = dev;
-    dev->addr = server_addr;
-	//dev->timeout_ticks = pdMS_TO_TICKS(10); // FIXME i2cdev.h says these ticks are against an 80 KHz(?) clock, not the FreeRTOS ticks.
+	memset(&_dev, 0, sizeof(i2c_dev_t)); // zeroize dev
+	_dev.port = port;
+	_dev.cfg.sda_io_num = cfg->sda_io_num;
+	_dev.cfg.scl_io_num = cfg->scl_io_num;
+	_dev.cfg.master.clk_speed = cfg->master.clk_speed;
+	_dev.cfg.clk_flags = cfg->clk_flags;
+	_dev.addr = server_addr;
+	// dev.timeout_ticks = pdMS_TO_TICKS(10); // FIXME i2cdev.h says these ticks are against an 80 KHz(?) clock, not the FreeRTOS ticks.
 
 	// Store the received parameters into member variables
 	_server_addr = server_addr; // TODO don't store this separate from _dev
@@ -52,17 +55,18 @@ esp_err_t SX1509::begin(i2c_dev_t *dev, uint16_t server_addr, gpio_num_t resetPi
 	_pinInterrupt = interruptPin;
 	_pinOscillator = oscillatorPin;
 
-	ESP_RETURN_ON_ERROR(i2c_dev_create_mutex(_dev), LIBTAG, "create_mutex failed");
+	ESP_RETURN_ON_ERROR(i2c_dev_create_mutex(&_dev), LIBTAG, "create_mutex failed");
 	ESP_RETURN_ON_ERROR(init(), LIBTAG, "init() failed");
 	return ESP_OK;
 }
 
-esp_err_t SX1509::end() 
+esp_err_t SX1509::end()
 {
-	//FIXME this should be released by the program that installed the driver
+	// FIXME this should be released by the program that installed the driver
 	ESP_LOGD(LIBTAG, "end()");
-	return i2c_driver_delete(I2C_NUM_0); // FIXME should not be hard-coded
-	//FIXME release the mutex
+	return i2c_dev_delete_mutex(&_dev);
+	// return i2c_driver_delete(I2C_NUM_0); // FIXME should not be hard-coded
+	// FIXME release the mutex
 }
 
 // test communication. ESP_OK if good, ESP_ERR?
@@ -73,18 +77,21 @@ esp_err_t SX1509::init()
 	{
 		ESP_LOGD(LIBTAG, "Hardware reset");
 		reset(1);
-	} else {
+	}
+	else
+	{
 		ESP_LOGD(LIBTAG, "Software reset");
 		reset(0);
 	}
-	// are you there? 
-	ESP_RETURN_ON_ERROR(i2c_dev_probe(_dev, I2C_DEV_WRITE), LIBTAG, "Failed to contact server");
-	ESP_LOGD(LIBTAG, "Got ACK from %x", _dev->addr);
+	// are you there?
+	ESP_RETURN_ON_ERROR(i2c_dev_probe(&_dev, I2C_DEV_WRITE), LIBTAG, "Failed to contact server");
+	ESP_LOGD(LIBTAG, "Got ACK from %x", _dev.addr);
 	return ESP_OK;
 }
 
 esp_err_t SX1509::reset(bool hardware)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	esp_err_t ret = ESP_OK;
 	// if hardware bool is set
 	if (hardware)
@@ -93,47 +100,51 @@ esp_err_t SX1509::reset(bool hardware)
 		// if so nReset will not issue a POR, we'll need to clear that bit first
 		uint8_t regMisc;
 		ret = readByte(REG_MISC, &regMisc);
-		ESP_RETURN_ON_FALSE(ret == ESP_OK, ret, LIBTAG, "readByte(REG_MISC) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE(ret == ESP_OK, ret, reset_return, LIBTAG, "readByte(REG_MISC) returned 0x%x", ret);
 		ESP_LOGD(LIBTAG, "read REG_MISC: %x", regMisc);
 		if (regMisc & (1 << 2))
 		{
 			ESP_LOGD(LIBTAG, "clearing REG_MISC bit 2");
 			regMisc &= ~(1 << 2);
 			ret = writeByte(REG_MISC, regMisc);
-			ESP_RETURN_ON_FALSE(ret == ESP_OK, ret, LIBTAG, "writeByte(REG_MISC) returned 0x%x", ret);
+			ESP_GOTO_ON_FALSE(ret == ESP_OK, ret, reset_return, LIBTAG, "writeByte(REG_MISC) returned 0x%x", ret);
 		}
 		ESP_LOGD(LIBTAG, "read REG_MISC: %x", regMisc);
 		// Reset the SX1509, the pin is active low
 		gpio_set_direction(_pinReset, GPIO_MODE_OUTPUT);
-		gpio_set_level(_pinReset, LOW);  // pull reset pin low
-		vTaskDelay(pdMS_TO_TICKS(1));					  // Wait for the pin to settle
+		gpio_set_level(_pinReset, LOW);	 // pull reset pin low
+		vTaskDelay(pdMS_TO_TICKS(1));	 // Wait for the pin to settle
 		gpio_set_level(_pinReset, HIGH); // pull reset pin back high
 	}
 	else
 	{
 		// Software reset command sequence:
 		ret = writeByte(REG_RESET, 0x12);
-		ESP_RETURN_ON_FALSE(ret == ESP_OK, ret, LIBTAG, "writeByte(REG_RESET, 0x12) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE(ret == ESP_OK, ret, reset_return, LIBTAG, "writeByte(REG_RESET, 0x12) returned 0x%x", ret);
 		ret = writeByte(REG_RESET, 0x34);
-		ESP_RETURN_ON_FALSE(ret == ESP_OK, ret, LIBTAG, "writeByte(REG_RESET, 0x34) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE(ret == ESP_OK, ret, reset_return, LIBTAG, "writeByte(REG_RESET, 0x34) returned 0x%x", ret);
 	}
+
+reset_return:
+	i2c_dev_give_mutex(&_dev);
 	return ret;
 }
 
 esp_err_t SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	esp_err_t ret = ESP_OK;
 	uint8_t modeBit;
 	if ((inOut == OUTPUT) || (inOut == ANALOG_OUTPUT))
 	{
 		uint16_t tempRegData;
 		ret = readWord(REG_DATA_B, &tempRegData);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret);
 		if (initialLevel == LOW)
 		{
 			tempRegData &= ~(1 << pin);
 			ret = writeWord(REG_DATA_B, tempRegData);
-			ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeword(REG_DATA_B, %i) returned 0x%x", tempRegData, ret);
+			ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "writeword(REG_DATA_B, %i) returned 0x%x", tempRegData, ret);
 		}
 		modeBit = 0;
 	}
@@ -147,7 +158,7 @@ esp_err_t SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 	uint16_t savedDirectionReg;
 
 	ret = readWord(REG_DIR_B, &workingDirectionReg);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret);
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret);
 	ESP_LOGD(LIBTAG, "old dir flags: 0x%04x", workingDirectionReg);
 	if (modeBit)
 		workingDirectionReg |= (1 << pin);
@@ -156,38 +167,43 @@ esp_err_t SX1509::pinMode(uint8_t pin, uint8_t inOut, uint8_t initialLevel)
 
 	ret = writeWord(REG_DIR_B, workingDirectionReg);
 	ESP_LOGD(LIBTAG, "setting pin %i dir to 0x%x: writeWord(REG_DIR_B, 0x%x) returned 0x%x", pin, inOut, workingDirectionReg, ret);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_DIR_B, 0x%x) returned 0x%x", workingDirectionReg, ret);
-	// verify 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "writeWord(REG_DIR_B, 0x%x) returned 0x%x", workingDirectionReg, ret);
+	// verify
 	ret = readWord(REG_DIR_B, &savedDirectionReg);
-	ESP_RETURN_ON_FALSE((savedDirectionReg == workingDirectionReg), ESP_FAIL, LIBTAG, "setdir pin %i failed. 0x%x should be 0x%x", pin, savedDirectionReg, workingDirectionReg);
+	ESP_GOTO_ON_FALSE((savedDirectionReg == workingDirectionReg), ESP_FAIL, pinMode_return, LIBTAG, "setdir pin %i failed. 0x%x should be 0x%x", pin, savedDirectionReg, workingDirectionReg);
 
 	// If INPUT_PULLUP was called, set up the pullup too:
 	if (inOut == INPUT_PULLUP)
 	{
-		ret = writePin(pin, HIGH); //TEST
+		ret = writePin(pin, HIGH); 
 		ESP_LOGD(LIBTAG, "pulling up pin: writePin(%i, %i) returned 0x%x", pin, HIGH, ret);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writePin(%i, %i) returned 0x%x", pin, HIGH, ret);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "writePin(%i, %i) returned 0x%x", pin, HIGH, ret);
 	}
 	if (inOut == ANALOG_OUTPUT)
 	{
-		ret = ledDriverInit(pin); //TEST
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "ledDriverInit(%i) returned 0x%x", pin, ret);
+		i2c_dev_give_mutex(&_dev);
+		ret = ledDriverInit(pin); 
+		i2c_dev_take_mutex(&_dev);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, pinMode_return, LIBTAG, "ledDriverInit(%i) returned 0x%x", pin, ret);
 	}
+
+pinMode_return:
+	i2c_dev_give_mutex(&_dev);
 	return ret;
 }
 
-//TEST
 esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	esp_err_t ret = ESP_OK;
 	uint16_t tempRegDir;
 	ret = readWord(REG_DIR_B, &tempRegDir);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret);
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret);
 	if ((0xFFFF ^ tempRegDir) & (1 << pin)) // If the pin is an output, write high/low
 	{
 		uint16_t tempRegData;
 		ret = readWord(REG_DATA_B, &tempRegData);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret);
 		if (highLow)
 			tempRegData |= (1 << pin);
 		else
@@ -198,10 +214,10 @@ esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 	{
 		uint16_t tempPullUp;
 		ret = readWord(REG_PULL_UP_B, &tempPullUp);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readword(REG_PULL_UP_B) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "readword(REG_PULL_UP_B) returned 0x%x", ret);
 		uint16_t tempPullDown;
 		ret = readWord(REG_PULL_DOWN_B, &tempPullDown);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readword(REG_PULL_DOWN_B) returned 0x%x", ret);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "readword(REG_PULL_DOWN_B) returned 0x%x", ret);
 
 		if (highLow) // if HIGH, do pull-up, disable pull-down
 		{
@@ -214,10 +230,13 @@ esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 			tempPullUp &= ~(1 << pin);
 		}
 		ret = writeWord(REG_PULL_UP_B, tempPullUp);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_PULL_UP_B) returned 0x%x", ret);
-		ret = writeWord(REG_PULL_DOWN_B, tempPullDown); 
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_PULL_DOWN_B) returned 0x%x", ret);
-		return ret; 
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "writeWord(REG_PULL_UP_B) returned 0x%x", ret);
+		ret = writeWord(REG_PULL_DOWN_B, tempPullDown);
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, writePin_return, LIBTAG, "writeWord(REG_PULL_DOWN_B) returned 0x%x", ret);
+
+	writePin_return:
+		i2c_dev_give_mutex(&_dev);
+		return ret;
 	}
 }
 
@@ -228,15 +247,15 @@ esp_err_t SX1509::digitalWrite(uint8_t pin, uint8_t highLow)
 
 uint8_t SX1509::readPin(uint8_t pin)
 {
-	//esp_err_t ret = ESP_OK;
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	uint16_t tempRegDir;
-	//ret = readWord(REG_DIR_B, &tempRegDir);
+	// ret = readWord(REG_DIR_B, &tempRegDir);
 	readWord(REG_DIR_B, &tempRegDir);
 
 	if (tempRegDir & (1 << pin)) // If the pin is an input
 	{
 		uint16_t tempRegData = 0;
-		//ret = readWord(REG_DATA_B, &tempRegData);
+		// ret = readWord(REG_DATA_B, &tempRegData);
 		readWord(REG_DATA_B, &tempRegData);
 		if (tempRegData & (1 << pin))
 			return HIGH;
@@ -246,12 +265,15 @@ uint8_t SX1509::readPin(uint8_t pin)
 		ESP_LOGE(LIBTAG, "Pin %d not INPUT, REG_DIR_B: %x", pin, tempRegDir);
 	}
 
+	i2c_dev_give_mutex(&_dev);
 	return LOW;
 }
 
 bool SX1509::readPin(const uint8_t pin, bool *value)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	uint16_t tempRegDir;
+	bool ret = false;
 	if (readWord(REG_DIR_B, &tempRegDir))
 	{
 		if (tempRegDir & (1 << pin))
@@ -260,16 +282,17 @@ bool SX1509::readPin(const uint8_t pin, bool *value)
 			if (readWord(REG_DATA_B, &tempRegData))
 			{
 				*value = (tempRegData & (1 << pin)) != 0;
-				return true;
+				ret = true;
 			};
 		}
 		else
 		{
 			*value = false;
-			return true;
+			ret = true;
 		}
 	}
-	return false;
+	i2c_dev_give_mutex(&_dev);
+	return ret;
 }
 
 uint8_t SX1509::digitalRead(uint8_t pin)
@@ -285,6 +308,7 @@ bool SX1509::digitalRead(uint8_t pin, bool *value)
 // ORing the ret's together out of laziness. If more than one type of error, a munged error code is guaranteed.
 esp_err_t SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= false*/)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	esp_err_t ret = ESP_OK;
 	uint16_t tempWord;
 	uint8_t tempByte;
@@ -292,37 +316,37 @@ esp_err_t SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= 
 	// Disable input buffer
 	// Writing a 1 to the pin bit will disable that pins input buffer
 	ret = readWord(REG_INPUT_DISABLE_B, &tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_INPUT_DISABLE_B) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_INPUT_DISABLE_B) returned 0x%x", ret);
 	tempWord |= (1 << pin);
 	ret = writeWord(REG_INPUT_DISABLE_B, tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_INPUT_DISABLE_B, %x) returned 0x%x", tempWord, ret); 
-	
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_INPUT_DISABLE_B, %x) returned 0x%x", tempWord, ret);
+
 	// Disable pull-up
 	// Writing a 0 to the pin bit will disable that pull-up resistor
 	ret = readWord(REG_PULL_UP_B, &tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_PULL_UP_B) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_PULL_UP_B) returned 0x%x", ret);
 	tempWord &= ~(1 << pin);
 	ret = writeWord(REG_PULL_UP_B, tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_PULL_UP_B, %x) returned 0x%x", tempWord, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_PULL_UP_B, %x) returned 0x%x", tempWord, ret);
 
 	// Set direction to output (REG_DIR_B)
 	ret = readWord(REG_DIR_B, &tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_DIR_B) returned 0x%x", ret);
 	tempWord &= ~(1 << pin); // 0=output
 	ret = writeWord(REG_DIR_B, tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_DIR_B, %x) returned 0x%x", tempWord, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_DIR_B, %x) returned 0x%x", tempWord, ret);
 
 	// Enable oscillator (REG_CLOCK)
 	ret = readByte(REG_CLOCK, &tempByte);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_CLOCK) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_CLOCK) returned 0x%x", ret);
 	tempByte |= (1 << 6);  // Internal 2MHz oscillator part 1 (set bit 6)
 	tempByte &= ~(1 << 5); // Internal 2MHz oscillator part 2 (clear bit 5)
 	ret = writeByte(REG_CLOCK, tempByte);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_CLOCK, %x) returned 0x%x", tempByte, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_CLOCK, %x) returned 0x%x", tempByte, ret);
 
 	// Configure LED driver clock and mode (REG_MISC)
 	ret = readByte(REG_MISC, &tempByte);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_MISC) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_MISC) returned 0x%x", ret);
 	if (log)
 	{
 		tempByte |= (1 << 7); // set logarithmic mode bank B
@@ -344,25 +368,28 @@ esp_err_t SX1509::ledDriverInit(uint8_t pin, uint8_t freq /*= 1*/, bool log /*= 
 		// tempByte |= freq;
 	}
 
-	freq = (freq & 0x7) << 4;	// mask only 3 bits and shift to bit position 6:4 
+	freq = (freq & 0x7) << 4; // mask only 3 bits and shift to bit position 6:4
 	tempByte |= freq;
 
 	ret = writeByte(REG_MISC, tempByte);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_MISC, %x) returned 0x%x", tempWord, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_MISC, %x) returned 0x%x", tempWord, ret);
 
 	// Enable LED driver operation (REG_LED_DRIVER_ENABLE)
 	ret = readWord(REG_LED_DRIVER_ENABLE_B, &tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_LED_DRIVER_ENABLE_B) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_LED_DRIVER_ENABLE_B) returned 0x%x", ret);
 	tempWord |= (1 << pin);
 	ret = writeWord(REG_LED_DRIVER_ENABLE_B, tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_LED_DRIVER_ENABLE_B, %x) returned 0x%x", tempWord, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_LED_DRIVER_ENABLE_B, %x) returned 0x%x", tempWord, ret);
 
 	// Set REG_DATA bit low ~ LED driver started
 	ret = readWord(REG_DATA_B, &tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "readWord(REG_DATA_B) returned 0x%x", ret);
 	tempWord &= ~(1 << pin);
 	ret = writeWord(REG_DATA_B, tempWord);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_DATA_B, %x) returned 0x%x", tempWord, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, ledDriverInit_return, LIBTAG, "writeWord(REG_DATA_B, %x) returned 0x%x", tempWord, ret);
+
+ledDriverInit_return:
+	i2c_dev_give_mutex(&_dev);
 	return ret;
 }
 
@@ -405,32 +432,35 @@ esp_err_t SX1509::breathe(uint8_t pin, unsigned long tOn, unsigned long tOff, un
 
 esp_err_t SX1509::setupBlink(uint8_t pin, uint8_t onReg, uint8_t offReg, uint8_t onIntensity, uint8_t offIntensity, uint8_t tRise, uint8_t tFall, bool log)
 {
-	esp_err_t ret = ESP_OK;
-	ret = ledDriverInit(pin, log);
-    ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "ledDriverInit(%i, %i) returned 0x%x", pin, log, ret); 
 
+	esp_err_t ret = ESP_OK;
+	uint8_t value;
+	ret = ledDriverInit(pin, log);
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "ledDriverInit(%i, %i) returned 0x%x", pin, log, ret);
+
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	// Keep parameters within their limits:
-	onReg &= 0x1F;  // tOn should be a 5-bit value
+	onReg &= 0x1F;	// tOn should be a 5-bit value
 	offReg &= 0x1F; // tOff should be a 5-bit value
 	offIntensity &= 0x07;
 	// Write the time on
 	// 1-15:  TON = 64 * tOn * (255/ClkX)
 	// 16-31: TON = 512 * tOn * (255/ClkX)
 	ret = writeByte(REG_T_ON[pin], onReg);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_ON[pin], pin, onReg, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_ON[pin], pin, onReg, ret);
 
 	// Write the time/intensity off register
 	// 1-15:  TOFF = 64 * tOff * (255/ClkX)
 	// 16-31: TOFF = 512 * tOff * (255/ClkX)
 	// linear Mode - IOff = 4 * offIntensity
 	// log mode - Ioff = f(4 * offIntensity)
-	uint8_t value = (offReg << 3) | offIntensity;
+	value = (offReg << 3) | offIntensity;
 	ret = writeByte(REG_OFF[pin], value);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_OFF[pin], pin, value, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_OFF[pin], pin, value, ret);
 
 	// Write the on intensity:
 	ret = writeByte(REG_I_ON[pin], onIntensity);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_ON[pin], pin, onIntensity, ret); 
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_ON[pin], pin, onIntensity, ret);
 
 	// Prepare tRise and tFall
 	tRise &= 0x1F; // tRise is a 5-bit value
@@ -443,7 +473,7 @@ esp_err_t SX1509::setupBlink(uint8_t pin, uint8_t onReg, uint8_t offReg, uint8_t
 	if (REG_T_RISE[pin] != 0xFF)
 	{
 		ret = writeByte(REG_T_RISE[pin], tRise);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_RISE[pin], pin, tRise, ret); 
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_RISE[pin], pin, tRise, ret);
 	}
 	// Write regTFall
 	// 0: off
@@ -452,11 +482,13 @@ esp_err_t SX1509::setupBlink(uint8_t pin, uint8_t onReg, uint8_t offReg, uint8_t
 	if (REG_T_FALL[pin] != 0xFF)
 	{
 		ret = writeByte(REG_T_FALL[pin], tFall);
-		ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_FALL[pin], pin, tRise, ret); 
+		ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, setupBlink_return, LIBTAG, "writeByte(%x[%i], %i) returned 0x%x", REG_T_FALL[pin], pin, tRise, ret);
 	}
+
+setupBlink_return:
+	i2c_dev_give_mutex(&_dev);
 	return ret;
 }
-
 
 // void SX1509::keypad(uint8_t rows, uint8_t columns, uint16_t sleepTime, uint8_t scanTime, uint8_t debounceTime)
 // {
@@ -614,7 +646,7 @@ void SX1509::debounceConfig(uint8_t configValue)
 
 /**
  * @brief set debounce time
- * 
+ *
  * @param time in ms, rounded down to nearest power of 2
  */
 void SX1509::debounceTime(uint8_t time)
@@ -668,7 +700,7 @@ void SX1509::debouncePin(uint8_t pin)
 // 		debouncePin(i);
 // }
 
-//TEST
+// TEST
 esp_err_t SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 {
 	// Set REG_INTERRUPT_MASK
@@ -679,7 +711,7 @@ esp_err_t SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 	tempWord &= ~(1 << pin); // 0 = event on IO will trigger interrupt
 	ret = writeWord(REG_INTERRUPT_MASK_B, tempWord);
 	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_INTERRUPT_MASK_B, %x) returned 0x%x", tempWord, ret);
-	
+
 	uint8_t sensitivity = 0;
 	switch (riseFall)
 	{
@@ -718,17 +750,17 @@ esp_err_t SX1509::enableInterrupt(uint8_t pin, uint8_t riseFall)
 	return ret;
 }
 
-esp_err_t SX1509::interruptSource( uint16_t *intSource, bool clear /* =true*/)
+esp_err_t SX1509::interruptSource(uint16_t *intSource, bool clear /* =true*/)
 {
+	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
 	esp_err_t ret = ESP_OK;
 	ret = readWord(REG_INTERRUPT_SOURCE_B, intSource);
-	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "readWord(REG_INTERRUPT_SOURCE_B) returned 0x%x", ret);
+	ESP_GOTO_ON_FALSE((ret == ESP_OK), ret, interruptSource_return, LIBTAG, "readWord(REG_INTERRUPT_SOURCE_B) returned 0x%x", ret);
 	if (clear)
 		ret = clearInterrupt(); // TEST
-	// {	
-	// 	ret = writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF);
-	// 	ESP_RETURN_ON_FALSE((ret == ESP_OK), ret, LIBTAG, "writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF) returned 0x%x", ret);
-	// }
+
+interruptSource_return:
+	i2c_dev_give_mutex(&_dev);
 	return ret;
 }
 
@@ -736,7 +768,7 @@ esp_err_t SX1509::clearInterrupt()
 {
 	return writeWord(REG_INTERRUPT_SOURCE_B, 0xFFFF); // writes to both SOURCE_B and the following SOURCE_A
 }
-//TEST
+// TEST
 bool SX1509::checkInterrupt(uint8_t pin)
 {
 	uint16_t intSource = 0;
@@ -840,9 +872,9 @@ uint8_t SX1509::calculateSlopeRegister(uint8_t ms, uint8_t onIntensity, uint8_t 
 //	- deviceAddress should already be set by the constructor.
 //	- Return value is ESP_OK if all is well, or an error code from i2c_master_write_read_device otherwise.
 // Value is returned in read_buffer.
-esp_err_t SX1509::readByte(uint8_t registerAddress, uint8_t* read_buffer)
+esp_err_t SX1509::readByte(uint8_t registerAddress, uint8_t *read_buffer)
 {
-	return i2c_dev_read_reg(_dev, registerAddress, read_buffer, 1); // TEST
+	return i2c_dev_read_reg(&_dev, registerAddress, read_buffer, 1); // TEST
 
 	// return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
 	// 	&registerAddress, 1,
@@ -888,8 +920,8 @@ esp_err_t SX1509::readWord(uint8_t registerAddress, uint16_t *value)
 	// ret = readByte(registerAddress, &dest[0]); // FIXME DEBUG
 	// ret = readByte(registerAddress+1, &dest[1]);
 	ESP_RETURN_ON_FALSE(ret == ESP_OK, ret, LIBTAG, "readBytes(%x, dest, 2) returned 0x%x", registerAddress, ret);
-//	value[0] = dest[1];
-//	value[1] = dest[0];
+	//	value[0] = dest[1];
+	//	value[1] = dest[0];
 	*value = (uint16_t)dest[0] << 8 | dest[1]; // FIXME dest[0] is always 0, and dest[1] has what should be in dest[0]
 	// ESP_LOGD(LIBTAG, "d0 d1:%x %x val:%x", dest[0], dest[1], *value);
 	return ret;
@@ -901,14 +933,14 @@ esp_err_t SX1509::readWord(uint8_t registerAddress, uint16_t *value)
 //	- destination is an array of bytes where the read values will be stored into
 //	- length is the number of bytes to be read
 //	- Return esp_err_t
-//FIXME I2C_NUM_0 should not be hard-coded
-esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t* destination, uint8_t length)
+// FIXME I2C_NUM_0 should not be hard-coded
+esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t *destination, uint8_t length)
 {
-	return i2c_dev_read_reg(_dev, firstRegisterAddress, destination, length); // TEST
-	// return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
-	// 	&firstRegisterAddress, 1,
-	// 	destination, length,
-	// 	length * 10 / portTICK_PERIOD_MS); // TODO timing is a guess, and probably too long
+	return i2c_dev_read_reg(&_dev, firstRegisterAddress, destination, length); // TEST
+																			   // return i2c_master_write_read_device(I2C_NUM_0, _server_addr,
+																			   // 	&firstRegisterAddress, 1,
+																			   // 	destination, length,
+																			   // 	length * 10 / portTICK_PERIOD_MS); // TODO timing is a guess, and probably too long
 }
 
 // writeByte(uint8_t registerAddress, uint8_t writeValue)
@@ -918,12 +950,12 @@ esp_err_t SX1509::readBytes(uint8_t firstRegisterAddress, uint8_t* destination, 
 //	- Return value: ESP_OK if succeeded
 esp_err_t SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 {
-	return i2c_dev_write_reg(_dev, registerAddress, &writeValue, 1);
-	
+	return i2c_dev_write_reg(&_dev, registerAddress, &writeValue, 1);
+
 	// const uint8_t write_buffer[] = {registerAddress, writeValue};
 	// return i2c_master_write_to_device(I2C_NUM_0, _server_addr,
-    //                                  write_buffer, 2,
-    //                                  10 / portTICK_PERIOD_MS);
+	//                                  write_buffer, 2,
+	//                                  10 / portTICK_PERIOD_MS);
 }
 
 // writeWord(uint8_t registerAddress, uint16_t writeValue)
@@ -934,15 +966,14 @@ esp_err_t SX1509::writeByte(uint8_t registerAddress, uint8_t writeValue)
 // TEST
 esp_err_t SX1509::writeWord(uint8_t registerAddress, uint16_t writeValue)
 {
-	const uint8_t write_buffer[] = { 
+	const uint8_t write_buffer[] = {
 		((uint8_t)((writeValue & 0xFF00) >> 8)),
-		((uint8_t)(writeValue & 0x00FF))
-		};
-	return i2c_dev_write_reg(_dev, registerAddress, &write_buffer, 2);
-    // // ESP_LOGD(LIBTAG, "reg:0x%x val:0x%x, bytes:0x%x, 0x%x)", write_buffer[0], writeValue, write_buffer[1], write_buffer[2]);
+		((uint8_t)(writeValue & 0x00FF))};
+	return i2c_dev_write_reg(&_dev, registerAddress, &write_buffer, 2);
+	// // ESP_LOGD(LIBTAG, "reg:0x%x val:0x%x, bytes:0x%x, 0x%x)", write_buffer[0], writeValue, write_buffer[1], write_buffer[2]);
 	// return i2c_master_write_to_device(I2C_NUM_0, _server_addr,
-    //                                  write_buffer, 3,
-    //                                  2* 10 / portTICK_PERIOD_MS);
+	//                                  write_buffer, 3,
+	//                                  2* 10 / portTICK_PERIOD_MS);
 }
 
 // // writeBytes(uint8_t firstRegisterAddress, uint8_t * writeArray, uint8_t length)

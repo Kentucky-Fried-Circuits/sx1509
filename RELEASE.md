@@ -1,3 +1,8 @@
+# V2.0.0
+## Major Changes
+* reworked begin() with new parameters
+* made end() esp_idf_lib-compliant
+
 # V1.0.0 
 ## Major Changes 
 removed I2C driver install from sx1509::begin()
@@ -10,6 +15,7 @@ FIXME(?) remove depencency on UncleRus' i2cdev and esp_idf_lib_helpers
 
 ## Known Issues
 * It's probable that the code isn't turning on the back light.
+* Not every operation is yet thread-safe, I think. At the port level, yes, but not the device level.
 
 ## Troubleshooting
 05-1000193 REV A #1, 05-1000219 REV - #2.
