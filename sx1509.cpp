@@ -240,7 +240,7 @@ esp_err_t SX1509::writePin(uint8_t pin, uint8_t highLow)
 
 writePin_return:
 	ESP_ERROR_CHECK(i2c_dev_give_mutex(&_dev));
-	ESP_LOGD(LIBTAG, "writePin(): gave up mutex");
+	ESP_LOGV(LIBTAG, "writePin(): gave up mutex");
 	return ret;
 }
 
