@@ -86,7 +86,7 @@ class SX1509
 private: // These private functions are not available to Arduino sketches.
 		 // If you need to read or write directly to registers, consider
 		 // putting the writeByte, readByte functions in the public section
-	i2c_dev_t *_dev;
+	i2c_dev_t _dev;
 	uint8_t _deviceAddress; // I2C Address of SX1509
 						   // Pin definitions:
 	gpio_num_t _pinInterrupt;
@@ -127,9 +127,9 @@ public:
 	// -----------------------------------------------------------------------------
 	/**
 	 * @brief initializes the SX1509
-	 * @note It requires the i2c interface to already be begun, resets the IC, and tries to read some
+	 * @note It requires the i2c interface to already be begun (i2cdev_init()), resets the IC, and tries to read some
 	 *  	registers to prove it's connected.
-	 *
+	 * @param port i2c_port_t (0 or 1 for ESP32)
 	 * @param server_addr should be the 7-bit address of the SX1509. This should be
 	 *		 one of four values - 0x3E, 0x3F, 0x70, 0x71 - all depending on what the
 	 *		 ADDR0 and ADDR1 pins are set to. This variable is required.
@@ -142,7 +142,7 @@ public:
 	 *		 pin is optional.
 	 * @return esp_err_t ESP_OK if communication is successful, ESP_ERR on error
 	 */
-	esp_err_t begin(i2c_dev_t *dev, uint16_t server_addr, gpio_num_t resetPin = GPIO_NUM_MAX, gpio_num_t interruptPin = GPIO_NUM_MAX, gpio_num_t oscillatorPin = GPIO_NUM_MAX);
+	esp_err_t begin(i2c_port_t port, i2c_config_t *cfg, uint16_t server_addr, gpio_num_t resetPin = GPIO_NUM_MAX, gpio_num_t interruptPin = GPIO_NUM_MAX, gpio_num_t oscillatorPin = GPIO_NUM_MAX);
 
 	// -----------------------------------------------------------------------------
 	// end(): This function unistalls the I2C driver for the SX1509 so a different
