@@ -251,7 +251,7 @@ esp_err_t SX1509::digitalWrite(uint8_t pin, uint8_t highLow)
 
 uint8_t SX1509::readPin(uint8_t pin)
 {
-	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
+	// ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev)); // not sure we care about exclusive access to reading
 	uint16_t tempRegDir;
 	// ret = readWord(REG_DIR_B, &tempRegDir);
 	readWord(REG_DIR_B, &tempRegDir);
@@ -262,20 +262,20 @@ uint8_t SX1509::readPin(uint8_t pin)
 		// ret = readWord(REG_DATA_B, &tempRegData);
 		readWord(REG_DATA_B, &tempRegData);
 		if (tempRegData & (1 << pin))
-			return HIGH;
+			return HIGH; // if we're using mutexes, we need to give it up before returning
 	}
 	else
 	{
 		ESP_LOGE(LIBTAG, "Pin %d not INPUT, REG_DIR_B: %x", pin, tempRegDir);
 	}
 
-	i2c_dev_give_mutex(&_dev);
+	// i2c_dev_give_mutex(&_dev);
 	return LOW;
 }
 
 bool SX1509::readPin(const uint8_t pin, bool *value)
 {
-	ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev));
+	// ESP_ERROR_CHECK(i2c_dev_take_mutex(&_dev)); not sure we care about exclusive read access
 	uint16_t tempRegDir;
 	bool ret = false;
 	if (readWord(REG_DIR_B, &tempRegDir))
@@ -295,7 +295,7 @@ bool SX1509::readPin(const uint8_t pin, bool *value)
 			ret = true;
 		}
 	}
-	i2c_dev_give_mutex(&_dev);
+	// i2c_dev_give_mutex(&_dev);
 	return ret;
 }
 
