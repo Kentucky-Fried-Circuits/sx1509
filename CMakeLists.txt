@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS sx1509.cpp 
+    SRCS sx1509.cpp sx1509_cwrapper.cpp
     INCLUDE_DIRS .
     REQUIRES i2cdev 
 )
