@@ -25,6 +25,9 @@ Development environment specifics:
 
 #include "sx1509.hpp"
 #include "sx1509_registers.h"
+#include "sx1509_cwrapper.h"
+
+
 #define LOG_LOCAL_LEVEL ESP_LOG_DEBUG // this works! It even overrides the CONFIG_LOG_MAXIMUM_LEVEL_DEBUG
 #include "esp_log.h"
 #include "esp_err.h"
