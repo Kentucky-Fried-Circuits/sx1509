@@ -41,7 +41,7 @@ esp_err_t SX1509::begin(i2c_port_t port, i2c_config_t *cfg, uint16_t server_addr
 	//         (server_addr [is acceptable]))
 	/*Since we will restart display io, we need to make sure to clean the semaphore.*/
 	if (_dev.mutex != NULL)
-		i2c_dev_delete_mutex(&_dev);
+		end();
 
 	memset(&_dev, 0, sizeof(i2c_dev_t)); // zeroize dev
 	_dev.port = port;
